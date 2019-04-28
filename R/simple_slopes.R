@@ -3,34 +3,6 @@
 #' \code{sim_slopes} conducts a simple slopes analysis for the purposes of
 #' understanding two- and three-way interaction effects in linear regression.
 #'
-#' @param pred The predictor variable involved in the interaction.
-#'
-#' @param modx The moderator variable involved in the interaction.
-#'
-#' @param mod2 Optional. The name of the second moderator
-#'  variable involved in the interaction.
-#'
-#' @param modx.values For which values of the moderator should simple slopes
-#'   analysis be performed? Default is \code{NULL}. If \code{NULL}, then the
-#'   values will be the customary +/- 1 standard deviation from the mean as
-#'   well as the mean itself. There is no specific limit on the number of
-#'   variables provided. If
-#'   \code{"plus-minus"}, uses just +/- 1 standard
-#'   deviation without the mean. You may also choose `"terciles"` to split
-#'   the data into equally-sized groups and choose the point at the mean of
-#'   each of those groups.
-#'
-#'   Factor variables
-#'   are not particularly suited to simple slopes analysis, but you could have
-#'   a numeric moderator with values of 0 and 1 and give \code{c(0,1)} to
-#'   compare the slopes at the different conditions. Two-level factor
-#'   variables are coerced to numeric 0/1 variables, but are not
-#'   standardized/centered like they could be if your input data had a numeric
-#'   0/1 variable.
-#'
-#' @param mod2.values Same as `modx.values`, but for the second moderator
-#' (`mod2`).
-#'
 #' @param centered A vector of quoted variable names that are to be
 #'   mean-centered. If `"all"`, all non-focal predictors as well as
 #'   the `pred` variable are centered. You
@@ -60,6 +32,14 @@
 #'
 #' @param ... Arguments passed to \code{\link{johnson_neyman}} and
 #'   `summ`.
+#'
+#' @param v.cov A function to calculate variances for the model. Examples
+#'  could be [sandwich::vcovPC()].
+#'
+#' @param v.cov.args A list of arguments for the `v.cov` function. For
+#'  whichever argument should be the fitted model, put `"model"`.
+#'
+#' @inheritParams interact_plot
 #'
 #' @details This allows the user to perform a simple slopes analysis for the
 #'   purpose of probing interaction effects in a linear regression. Two- and
@@ -150,7 +130,7 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
                        digits = getOption("jtools-digits", default = 2),
                        pvals = TRUE, confint = FALSE, ci.width = .95,
                        cluster = NULL, modx.labels = NULL, mod2.labels = NULL,
-                       ...) {
+                       v.cov = NULL, v.cov.args = NULL, ...) {
 
   # Capture extra arguments
   dots <- list(...)
@@ -169,6 +149,13 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   if (modx == "NULL") {modx <- NULL}
   mod2 <- quo_name(enexpr(mod2))
   if (mod2 == "NULL") {mod2 <- NULL}
+
+  # Warn user if interaction term is absent
+  if (!check_interactions(as.formula(formula(model)), c(pred, modx, mod2))) {
+    warn_wrap(paste(c(pred, modx, mod2), collapse = " and "),
+              " are not included in an interaction with one another in the
+              model.")
+  }
 
   if (length(dots) > 0) { # See if there were any extra args
     # Check for deprecated arguments
@@ -196,11 +183,6 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   ss <- list()
 
   ss <- structure(ss, digits = digits)
-
-  if (!is.null(modx.values) && !is.vector(modx.values)) {
-    stop_wrap("The modx.values argument must be a vector of at least length 2
-              if it is used.")
-  }
 
   d <- get_data(model)
   if (is_survey <- "svyglm" %in% class(model)) {
@@ -307,7 +289,10 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
     # Don't want def = TRUE for factors even though they are character
     if (!is.numeric(d[[mod2]])) {ss <- structure(ss, def2 = FALSE)}
 
-  } else {mod2vals2 <- NULL}
+  } else {
+    mod2vals2 <- NULL
+    modxvals2 <- rev(modxvals2)
+  }
 
 #### Fit models ##############################################################
 
@@ -401,19 +386,21 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
     }
 
     # Getting SEs, robust or otherwise
-    if (robust != FALSE) {
-
+    if (robust != FALSE & is.null(v.cov)) {
       # For J-N
       covmat <- get_robust_se(newmod, robust, cluster, dt)$vcov
-
-    } else {
-
+    } else if (is.null(v.cov)) {
       # For J-N
       covmat <- vcov(newmod)
-
+    } else {
+      vcovargs <- v.cov.args
+      vcovargs[[which(sapply(vcovargs, function(x) length(x[[1]]) == 1 &&
+                               x[[1]] == "model"))]] <-
+        newmod
+      covmat <- do.call(v.cov, vcovargs)
     }
 
-    if (robust == FALSE) {covmat <- NULL}
+    # if (robust == FALSE & is.null()) {covmat <- NULL}
 
     if (johnson_neyman == TRUE) {
       args <- list(newmod, pred = substitute(pred), modx = substitute(modx),
@@ -485,26 +472,44 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
     } else {
       which.cols <- NULL
     }
+
     # Getting SEs, robust or otherwise
     if (robust == TRUE) {
-
+      if (!is.null(v.cov)) {
+        vcovargs <- v.cov.args
+        vcovargs[[which(sapply(vcovargs, function(x) length(x[[1]]) == 1 &&
+                                 x[[1]] == "model"))]] <-
+          newmod
+        covmat <- do.call(v.cov, vcovargs)
+      } else {
+        covmat <- NULL
+      }
       # Use j_summ to get the coefficients
       sum <- summ(newmod, robust = robust, model.fit = FALSE,
                   confint = TRUE, ci.width = ci.width, vifs = FALSE,
                   cluster = cluster, which.cols = which.cols, pvals = pvals,
-                  ...)
+                  vcov = covmat, ...)
 
     } else {
-
+      if (is.null(v.cov)) {
+        # For J-N
+        covmat <- vcov(newmod)
+      } else {
+        vcovargs <- v.cov.args
+        vcovargs[[which(sapply(vcovargs, function(x) length(x[[1]]) == 1 &&
+                                 x[[1]] == "model"))]] <-
+          newmod
+        covmat <- do.call(v.cov, vcovargs)
+      }
       sum <- summ(newmod, model.fit = FALSE, confint = TRUE,
                   ci.width = ci.width, vifs = FALSE,
-                  which.cols = which.cols, pvals = pvals, ...)
+                  which.cols = which.cols, pvals = pvals, vcov = covmat, ...)
 
     }
 
     summat <- sum$coeftable
     if (pvals == FALSE) {summat <- summat[,colnames(summat) %nin% "p"]}
-    slopep <- summat[pred, ]
+    slopep <- summat[if (make.names(pred) != pred) bt(pred) else pred, ]
     intp <- summat["(Intercept)", ]
 
     retmat[i,1] <- modxvals2[i]
@@ -825,7 +830,8 @@ tidy.sim_slopes <- function(x, conf.level = .95, ...) {
     all_slopes <- do.call("rbind", x$slopes)
   }
 
-  # Include the moderator name (probably not best to include this redundant info)
+  # Include the moderator name (probably not best to include this redundant
+  # info)
   base$modx <- atts$modx
 
   # Move the table of values to the data frame
@@ -878,6 +884,7 @@ tidy.sim_slopes <- function(x, conf.level = .95, ...) {
     )
   }
 
+  base <- tibble::as_tibble(base)
   attr(base, "pred") <- atts$pred
 
   return(base)
@@ -923,6 +930,10 @@ nobs.sim_slopes <- function(object, ...) {
 #'  is 2.
 #' @param conf.level How wide the confidence interval should be, if it
 #'  is used. .95 (95\% interval) is the default.
+#' @param intercept Should conditional intercepts be included? Default is
+#'  whatever the `cond.int` argument to `x` was.
+#' @param int.format If conditional intercepts were requested, how should
+#'  they be formatted? Default is the same as `format`.
 #' @param ... Ignored.
 #'
 #' @details
@@ -939,10 +950,29 @@ nobs.sim_slopes <- function(object, ...) {
 
 as_huxtable.sim_slopes <-  function(x, format = "{estimate} ({std.error})",
   sig.levels = c(`***` = .001, `**` = .01, `*` = .05, `#` = .1),
-  digits = getOption("jtools-digits", 2), conf.level = .95, ...) {
+  digits = getOption("jtools-digits", 2), conf.level = .95,
+  intercept = attr(x, "cond.int"), int.format = format, ...) {
 
   df <- tidy.sim_slopes(x, conf.level = conf.level)
-  make_table(df = df, format = format, sig.levels = sig.levels, digits = digits)
+  if (intercept == TRUE) {
+    ints <- x$ints
+    # Need to bind rows if there's a second moderator
+    if (!is.null(attr(x, "mod2"))) {
+      ints <- tibble::as_tibble(do.call("rbind", ints))
+    } else {
+      ints <- tibble::as_tibble(ints)
+    }
+    # Need to rename columns to be like tidy d.f.
+    names(ints)[names(ints) %in% unlist(make_ci_labs(conf.level))] <-
+      c("conf.lower", "conf.upper")
+    names(ints)[names(ints) %in%
+      c("Est.", "S.E.", grep("val.", names(ints), value = T), "p")] <-
+      c("estimate", "std.error", "statistic", "p.value")
+  } else {
+    ints <- NULL
+  }
+  make_table(df = df, format = format, sig.levels = sig.levels,
+             digits = digits, intercept = ints)
 
 }
 
@@ -951,14 +981,12 @@ as_huxtable.sim_slopes <-  function(x, format = "{estimate} ({std.error})",
 make_table <- function(df, format = "{estimate} ({std.error})",
                        sig.levels = c(`***` = .001, `**` = .01, `*` = .05,
                                       `#` = .1),
-                       digits = getOption("jtools-digits", 2)) {
+                       digits = getOption("jtools-digits", 2),
+                       label = "Slope of", intercept = NULL,
+                       int.format = format) {
 
   # Get the predictor variable name
   pred.name <- attr(df, "pred")
-
-  df <- as.data.frame(lapply(df, function(x) {
-    if (is.numeric(x)) {as.numeric(num_print(x, digits))} else {x}
-  }))
 
   # Quick function to create asterisks
   return_asterisk <- function(x, levels) {
@@ -969,7 +997,6 @@ make_table <- function(df, format = "{estimate} ({std.error})",
     }
     return("")
   }
-
   # Vectorize it
   return_asterisks <- function(x, levels = c(`***` = .001, `**` = .01,
                                              `*` = .05, `#` = .1)) {
@@ -977,20 +1004,49 @@ make_table <- function(df, format = "{estimate} ({std.error})",
   }
 
   # Append the asterisks to the format
-  format <- paste0(format, "{return_asterisks(p.value, levels = sig.levels)}")
+  asts <- glue::glue_data("{return_asterisks(p.value, levels = sig.levels)}",
+                          .x = df)
+  # Format the numbers pre-emptively
+  df <- as.data.frame(lapply(df, function(x) {
+    if (is.numeric(x)) {num_print(x, digits)} else {x}
+  }))
+
+  # Deal with intercepts
+  ints <- if (!is.null(intercept)) {
+    # This is a non-obvious way of seeing if we have a sim_margins or slopes
+    if (is.data.frame(intercept)) {
+      # Format the numbers
+      intercept <- as.data.frame(lapply(intercept, function(x) {
+        if (is.numeric(x)) {num_print(x, digits)} else {x}
+      }))
+      # Use glue to format the key data
+      glue::glue_data(.x = intercept, int.format)
+    } else {
+      # If it's sim_margins, it's just a list of numbers
+      intercept
+    }
+  } else {NULL}
 
   # Create new DF with the minimal information
   df2 <- data.frame(
     # Moderator value
     modx.value = num_print(df$modx.value, digits),
     # Formatted slope
-    slope = glue::glue_data(.x = df, format),
+    slope = paste0(glue::glue_data(.x = df, format), asts),
     # 2nd moderator value (gets dropped later)
     mod2.value = df$mod2.value
   )
 
+  if (!is.null(ints)) {
+    df2["Conditional intercept"] <- num_print(ints, digits)
+    int.name <- "Conditional intercept"
+  } else {
+    int.name <- NULL
+  }
+
+
   # Add "slope of"
-  pred.name <- paste("Slope of", pred.name)
+  pred.name <- paste(label, pred.name)
 
   # Get moderator name
   modx.name <- df$modx[1]
@@ -1000,9 +1056,13 @@ make_table <- function(df, format = "{estimate} ({std.error})",
   names(df2)[1] <- modx.name
 
   # Create huxtable sans moderator 2 column
-  tab <- huxtable::as_hux(df2[names(df2) %nin% "mod2.value"])
+  tab <- huxtable::as_hux(df2 %not%
+                            "mod2.value" %just%
+                            c(modx.name, int.name, "slope"))
   # Align the huxtable left
   tab <- huxtable::set_align(tab, value = "left")
+
+  col_mult <- ifelse(is.null(int.name), yes = 1, no = 2)
 
   # 3-way interaction handling
   if (any(!is.na(df2$mod2.value))) {
@@ -1022,29 +1082,31 @@ make_table <- function(df, format = "{estimate} ({std.error})",
       row <- (i * vals_per_mod2) + i * 2
 
       # Insert row with 2nd moderator label
-      tab <- huxtable::insert_row(tab, c(lab, NA), after = row)
+      tab <- huxtable::insert_row(tab, c(lab, rep(NA, col_mult)), after = row)
       # Make that row cell span both columns
-      tab <- huxtable::set_colspan(tab, row + 1, 1, 2)
+      tab <- huxtable::set_colspan(tab, row + 1, 1, 2 + (col_mult - 1))
       # Align the row to the left
       tab <- huxtable::set_align(tab, row + 1, 1, "left")
 
       # Insert row with column labels
-      tab <- huxtable::insert_row(tab, c(modx.name, pred.name), after = row + 1)
+      tab <- huxtable::insert_row(tab, c(modx.name, int.name, pred.name),
+                                  after = row + 1)
       # Put border below that row
-      tab <- huxtable::set_bottom_border(tab, row + 2, 1:2, 1)
+      tab <- huxtable::set_bottom_border(tab, row + 2, 1:(2 + (col_mult - 1)),
+                                         1)
 
       # Now need to format just the top row...
       # Italicize the font
       tab <- huxtable::set_italic(tab, row + 1, 1, TRUE)
       # Put a border above that row
-      tab <- huxtable::set_top_border(tab, row + 1, 1:2, 1)
+      tab <- huxtable::set_top_border(tab, row + 1, 1:(2 + (col_mult - 1)), 1)
     }
 
   } else { # If no second moderator
     # Add row of column labels
-    tab <- huxtable::insert_row(tab, c(modx.name, pred.name))
+    tab <- huxtable::insert_row(tab, c(modx.name, int.name, pred.name))
     # Put a line below the column labels
-    tab <- huxtable::set_bottom_border(tab, 1, 1:2, 1)
+    tab <- huxtable::set_bottom_border(tab, 1, 1:(2 + (col_mult - 1)), 1)
   }
 
   # Format the numbers

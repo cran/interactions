@@ -18,7 +18,7 @@ cat_plot(model, pred, modx = NULL, mod2 = NULL, data = NULL,
   mod2.labels = NULL, set.offset = 1, x.label = NULL,
   y.label = NULL, main.title = NULL, legend.main = NULL,
   colors = "CUD Bright", partial.residuals = FALSE,
-  point.alpha = 0.6, color.class = NULL, ...)
+  point.alpha = 0.6, color.class = NULL, at = NULL, ...)
 }
 \arguments{
 \item{model}{A regression model. The function is tested with \code{lm},
@@ -65,8 +65,16 @@ uncertainty of the predictions very well. It is best to at least use the
 \item{pred.values}{Which values of the predictor should be included in the
 plot? By default, all levels are included.}
 
-\item{modx.values}{For which values of the moderator should lines be plotted?
-Default is \code{NULL}. If \code{NULL}, then the customary +/- 1 standard
+\item{modx.values}{For which values of the moderator should lines be
+plotted? There are two basic options:
+\itemize{
+\item A vector of values (e.g., \code{c(1, 2, 3)})
+\item A single argument asking to calculate a set of values. See details
+below.
+}
+
+Default is \code{NULL}. If \code{NULL} (or \code{mean-plus-minus}),
+then the customary +/- 1 standard
 deviation from the mean as well as the mean itself are used for continuous
 moderators. If \code{"plus-minus"}, plots lines when the moderator is at
 +/- 1 standard deviation without the mean. You may also choose \code{"terciles"}
@@ -222,6 +230,12 @@ observed data be? Default is 0.6, and it can range from 0 (transparent) to
 1 (opaque).}
 
 \item{color.class}{Deprecated. Now known as \code{colors}.}
+
+\item{at}{If you want to manually set the values of other variables in the
+model, do so by providing a named list where the names are the variables
+and the list values are vectors of the values. This can be useful
+especially when you are exploring interactions or other conditional
+predictions.}
 
 \item{...}{extra arguments passed to \code{make_predictions}}
 }
