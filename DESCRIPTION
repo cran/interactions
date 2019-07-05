@@ -1,14 +1,15 @@
 Package: interactions
 Type: Package
 Title: Comprehensive, User-Friendly Toolkit for Probing Interactions
-Version: 1.1.0
+Version: 1.1.1
 Authors@R: person(c("Jacob","A."), "Long", email = "long.1377@osu.edu",
   role = c("aut", "cre"), comment = c(ORCID = "0000-0002-1582-6214"))
 Description: A suite of functions for conducting and interpreting analysis 
   of statistical interaction in regression models that was formerly part of the 
   'jtools' package. Functionality includes visualization of two- and three-way
   interactions among continuous and/or categorical variables as well as 
-  calculation of "simple slopes" and Johnson-Neyman intervals. These
+  calculation of "simple slopes" and Johnson-Neyman intervals (see e.g., 
+  Bauer & Curran, 2005 <doi:10.1207/s15327906mbr4003_5>). These
   capabilities are implemented for generalized linear models in addition to the 
   standard linear regression context.
 URL: https://interactions.jacob-long.com
@@ -16,16 +17,16 @@ BugReports: https://github.com/jacob-long/interactions/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Imports: ggplot2, crayon, cli, jtools (>= 2.0.0), rlang (>= 0.3.0),
-        tibble
+Imports: ggplot2, crayon, cli, generics, jtools (>= 2.0.0), rlang (>=
+        0.3.0), tibble
 Suggests: broom, cowplot, ggstance, glue, huxtable (>= 3.0.0), lme4,
         margins, sandwich, survey, knitr, rmarkdown, testthat
 Enhances: brms, rstanarm
-RoxygenNote: 6.1.1
+RoxygenNote: 6.1.1.9000
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2019-04-26 13:48:12 UTC; jlong
+Packaged: 2019-07-04 22:39:16 UTC; jlong
 Author: Jacob A. Long [aut, cre] (<https://orcid.org/0000-0002-1582-6214>)
 Maintainer: Jacob A. Long <long.1377@osu.edu>
 Repository: CRAN
-Date/Publication: 2019-04-28 20:10:04 UTC
+Date/Publication: 2019-07-05 07:30:23 UTC

@@ -1,3 +1,17 @@
+# interactions 1.1.1
+
+Bugfixes:
+
+* `sim_slopes()` no longer fails getting Johnson-Neyman intervals for `merMod`
+models. (#20)
+* `cat_plot()` no longer ignores `pred.values` and `pred.labels` arguments.
+Thanks to [Paul Djupe](http://pauldjupe.com/) for alerting me to this.
+* The `tidy()` method for `sim_slopes` objects no longer returns numbers as
+strings. This had downstream effects on, e.g., the `plot()` method for 
+`sim_slopes`. (#22; thanks to Noah Greifer)
+* `sim_slopes()` now handles `lmerModTest` objects properly. Thanks to Eric 
+Shuman for bringing it to my attention.
+
 # interactions 1.1.0
 
 ## New function: `sim_margins()`

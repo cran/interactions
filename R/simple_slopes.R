@@ -302,6 +302,7 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   tcol <- try(colnames(summary(model)$coefficients)[3], silent = TRUE)
   if (class(tcol) != "try-error") {
     tcol <- gsub("value", "val.", tcol)
+    if (tcol == "df") tcol <- "t val." # kludge for lmerModTest
     which.cols <- c("Est.", "S.E.", unlist(make_ci_labs(ci.width)), tcol)
     if (pvals == TRUE) {which.cols <- c(which.cols, "p")}
   } else {
@@ -314,7 +315,7 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   # Need to make a matrix filled with NAs to store values from looped
   # model-making
   holdvals <- rep(NA, length(modxvals2) * (length(the_col_names) + 1))
-  retmat <- matrix(holdvals, nrow = length(modxvals2))
+  retmat <- as.data.frame(matrix(holdvals, nrow = length(modxvals2)))
 
   # Create a list to hold Johnson-Neyman objects
   jns <- list()
@@ -462,15 +463,6 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
       newmod <- eval(call)
     } else {
       newmod <- update(model, data = dt)
-    }
-
-    # Need proper name for test statistic
-    tcol <- try(colnames(summary(newmod)$coefficients)[3], silent = TRUE)
-    if (class(tcol) != "try-error") {
-      tcol <- gsub("value", "val.", tcol)
-      which.cols <- c("Est.", "S.E.", unlist(make_ci_labs(ci.width)), tcol, "p")
-    } else {
-      which.cols <- NULL
     }
 
     # Getting SEs, robust or otherwise
@@ -798,19 +790,13 @@ print.sim_slopes <- function(x, ...) {
 #' @param ... Ignored.
 #' @rdname sim_slopes_tidiers
 #' @export
-#' @rawNamespace
-#' if (getRversion() >= "3.6.0") {
-#'   S3method(broom::tidy, sim_slopes)
-#' } else {
-#'   export(tidy.sim_slopes)
-#' }
 
 tidy.sim_slopes <- function(x, conf.level = .95, ...) {
 
   cols <- c("estimate", "std.error", "statistic", "p.value", "modx",
             "modx.value", "mod2", "mod2.value")
   # Figure out how many rows the data frame will be
-  num_coefs <- ifelse(is.list(x$slopes),
+  num_coefs <- ifelse(!is.data.frame(x$slopes),
                       yes = length(x$slopes) * nrow(x$slopes[[1]]),
                       no = nrow(x$slopes))
   # Create NA-filled data frame
@@ -893,12 +879,6 @@ tidy.sim_slopes <- function(x, conf.level = .95, ...) {
 
 #' @rdname sim_slopes_tidiers
 #' @export
-#' @rawNamespace
-#' if (getRversion() >= "3.6.0") {
-#'   S3method(broom::glance, sim_slopes)
-#' } else {
-#'   export(glance.sim_slopes)
-#' }
 
 glance.sim_slopes <- function(x, ...) {
   data.frame(N = length(residuals(x$mods[[1]])))
