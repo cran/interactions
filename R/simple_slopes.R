@@ -22,7 +22,7 @@
 #'   is \code{FALSE}.
 #'
 #' @param jnalpha What should the alpha level be for the Johnson-Neyman
-#'   interval? Default is .05, which corresponds to a 95\% confidence interval.
+#'   interval? Default is .05, which corresponds to a 95% confidence interval.
 #'
 #' @param digits An integer specifying the number of digits past the decimal to
 #'   report in the output. Default is 2. You can change the default number of
@@ -240,7 +240,7 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   }
 
   # Now specify def or not (for labeling w/ print method)
-  if (is.character(modx.values) | is.null(modx.values)) {
+  if (is.character(modx.values) | is.null(modx.values) | !is.null(modx.labels)) {
 
     ss <- structure(ss, def = TRUE)
 
@@ -276,7 +276,7 @@ sim_slopes <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
     }
 
     # Now specify def or not
-    if (is.character(mod2.values) | is.null(mod2.values)) {
+    if (is.character(mod2.values) | is.null(mod2.values) | !is.null(mod2.labels)) {
 
       ss <- structure(ss, def2 = TRUE)
 
@@ -786,7 +786,7 @@ print.sim_slopes <- function(x, ...) {
 #' @description You can use [broom::tidy()] and [broom::glance()] for "tidy"
 #'  methods of storing `sim_slopes` output.
 #' @param x The `sim_slopes` object
-#' @param conf.level The width of confidence intervals. Default is .95 (95\%).
+#' @param conf.level The width of confidence intervals. Default is .95 (95%).
 #' @param ... Ignored.
 #' @rdname sim_slopes_tidiers
 #' @export
@@ -909,7 +909,7 @@ nobs.sim_slopes <- function(object, ...) {
 #' @param digits How many digits should the outputted table round to? Default
 #'  is 2.
 #' @param conf.level How wide the confidence interval should be, if it
-#'  is used. .95 (95\% interval) is the default.
+#'  is used. .95 (95% interval) is the default.
 #' @param intercept Should conditional intercepts be included? Default is
 #'  whatever the `cond.int` argument to `x` was.
 #' @param int.format If conditional intercepts were requested, how should

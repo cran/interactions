@@ -78,7 +78,7 @@
 #' @param int.width How large should the interval be, relative to the standard
 #'   error? The default, .95, corresponds to roughly 1.96 standard errors and
 #'   a .05 alpha level for values outside the range. In other words, for a
-#'   confidence interval, .95 is analogous to a 95\% confidence interval.
+#'   confidence interval, .95 is analogous to a 95% confidence interval.
 #'
 #' @param outcome.scale For nonlinear models (i.e., GLMs), should the outcome
 #'   variable be plotted on the link scale (e.g., log odds for logit models) or
@@ -382,11 +382,20 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
   if (linearity.check == TRUE) {facet.modx <- TRUE}
 
   if (is.null(data)) {
-    d <- get_data(model, warn = TRUE)
+    d <- get_data(model, warn = TRUE, ...)
   } else {
     d <- data
   }
   weights <- get_weights(model, d)$weights_name
+
+  # If modx.values is named, use the names as labels
+  if (is.null(modx.labels) & !is.null(names(modx.values))) {
+    modx.labels <- names(modx.values)
+  }
+  # If mod2.values is named, use the names as labels
+  if (is.null(mod2.labels) & !is.null(names(mod2.values))) {
+    mod2.labels <- names(mod2.values)
+  }
 
   pred_out <- prep_data(model = model, pred = pred, modx = modx,
                         modx.values = modx.values, mod2 = mod2,
@@ -434,7 +443,7 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
                       modxvals2 = modxvals2, mod2vals2 = mod2vals2,
                       weights = weights, rug = rug, rug.sides = rug.sides,
                       point.size = point.size, point.shape = point.shape,
-                      facet.modx = facet.modx)
+                      facet.modx = facet.modx, point.alpha = point.alpha)
 
 }
 
@@ -509,8 +518,12 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
              "12223242", "F282", "F4448444", "224282F2", "F1")
   ltypes <- types[seq_along(modxvals2)]
 
-  # Reverse the order of the linetypes if second moderator
-  if (!is.null(mod2)) ltypes <- rev(ltypes)
+  # Reverse the order of the linetypes to make thick line go to biggest value
+  if (is.numeric(modxvals2) & all(sort(modxvals2) == modxvals2)) {
+    ltypes <- rev(ltypes)
+  } else if (!is.null(mod2) & !(is.numeric(modxvals2) & !all(sort(modxvals2) == modxvals2))) { # also flip for factor second moderators
+    ltypes <- rev(ltypes)
+  }
 
   if (gradient == FALSE) {
     names(colors) <- modx.labels
@@ -669,15 +682,26 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
     x
   }
 
+  # Some shorthand functions to automatically exclude NA
+  quant <- function(x, ...) {
+    quantile(x, ..., na.rm = TRUE)
+  }
+  min2 <- function(...) {
+    min(..., na.rm = TRUE)
+  }
+  max2 <- function(...) {
+    max(..., na.rm = TRUE)
+  }
+
   # Get scale colors, provide better legend title
   if (!is.numeric(d[[as_string(modx)]])) {
     p <- p + scale_colour_manual(name = legend.main, values = colors,
                                  breaks = names(colors),
                                  aesthetics = c("colour", "fill"))
   } else {
-    limits <- quantile(d[[modx]], probs = c(.1, .9))
-    if (min(modxvals2) < limits[1]) {limits[1] <- min(modxvals2)}
-    if (max(modxvals2) > limits[2]) {limits[2] <- max(modxvals2)}
+    limits <- quant(d[[modx]], probs = c(.1, .9))
+    if (min2(modxvals2) < limits[1]) {limits[1] <- min2(modxvals2)}
+    if (max2(modxvals2) > limits[2]) {limits[2] <- max2(modxvals2)}
     p <- p + scale_colour_gradientn(name = legend.main,
                                     breaks = modxvals2,
                                     labels = modx.labels,

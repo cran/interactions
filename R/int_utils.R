@@ -174,6 +174,8 @@ mod_vals <- function(d, modx, modx.values, survey, weights,
     }
   } else {char1 <- FALSE}
 
+  user_specified <- length(modx.values) > 1
+
   # If using a preset, send to auto_mod_vals function
   if (is_fac == FALSE && (is.null(modx.values) | is.character(modx.values))) {
 
@@ -242,16 +244,20 @@ mod_vals <- function(d, modx, modx.values, survey, weights,
 
   }
 
-  if (is_fac == FALSE) {
+  # Hacky way to have a shorthand to drop NA
+  range2 <- function(...) {
+    range(..., na.rm = TRUE)
+  }
+  if (is_fac == FALSE & user_specified == FALSE) {
     # The proper order for interact_plot depends on presence of second moderator
     modxvals2 <- sort(modxvals2, decreasing = (!any.mod2 & !facet.modx))
-    if (any(modxvals2 > range(d[[modx]])[2])) {
-      warn_wrap(paste(modxvals2[which(modxvals2 > range(d[[modx]])[2])],
+    if (any(modxvals2 > range2(d[[modx]])[2])) {
+      warn_wrap(paste(modxvals2[which(modxvals2 > range2(d[[modx]])[2])],
                       collapse = " and "), " is outside the observed range of ",
                 modx)
     }
-    if (any(modxvals2 < range(d[[modx]])[1])) {
-      warn_wrap(paste(modxvals2[which(modxvals2 < range(d[[modx]])[1])],
+    if (any(modxvals2 < range2(d[[modx]])[1])) {
+      warn_wrap(paste(modxvals2[which(modxvals2 < range2(d[[modx]])[1])],
                       collapse = " and "), " is outside the observed range of ",
                 modx)
     }
@@ -614,10 +620,10 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
 
 
   # Get the formula from lm object if given
-  formula <- as.formula(formula(model))
+  formula <- get_formula(model, ...)
 
   # Pulling the name of the response variable for labeling
-  resp <- jtools::get_response_name(model)
+  resp <- jtools::get_response_name(model, ...)
 
   # Create a design object
   design <- if ("svyglm" %in% class(model)) {
@@ -744,7 +750,10 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
         at = at_list, set.offset = set.offset, center = centered,
         interval = interval, outcome.scale = outcome.scale, ...
     )})
-    pms[[i]] <- pms[[i]][complete.cases(pms[[i]]), ]
+    # only looking for completeness in these variables
+    check_vars <- all.vars(get_formula(model, ...)) %just% names(pms[[i]])
+    pms[[i]] <-
+      pms[[i]][complete.cases(pms[[i]][check_vars]), ]
   }
 
   if (off == TRUE) {
@@ -757,7 +766,8 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
   if (partial.residuals == TRUE) {
     suppressMessages({
       d <- partialize(model, vars = c(pred, modx, mod2), center = centered,
-                      data = d, scale = outcome.scale, set.offset = set.offset)
+                      data = d, scale = outcome.scale, set.offset = set.offset,
+                      ...)
     })
   }
 
@@ -803,7 +813,9 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
   }
 
   # Dealing with transformations of the dependent variable
-  if (resp %nin% names(d)) {
+  # Have to make sure not to confuse situations with brmsfit objects and
+  # distributional DVs
+  if (resp %nin% names(d) & "dpar" %nin% names(list(...))) {
     trans_name <- as.character(deparse(formula[[2]]))
     d[[trans_name]] <- eval(formula[[2]], d)
   }
@@ -911,3 +923,44 @@ drop_factor_levels <- function(d, var, values, labels) {
   return(d)
 
 }
+
+
+# get_contrasts <- function(model) {
+#   form <- as.formula(formula(model))
+#   as.data.frame(t(attr(terms(form), "factors")))
+# }
+#
+# get_int_term <- function(model, vars) {
+#   cons <- get_contrasts(model)
+#   # Check for non-syntactic names
+#   vars <- sapply(vars, bt_if_needed)
+#   cons_vars <- rowMeans(cons[, vars])
+#   matches <- names(cons_vars %just% 1)
+#
+#   if (length(matches) == 1) {
+#     return(matches)
+#   } else {
+#     # nasty hack but I think it works; trying to isolate lowest-order match
+#     lengths <- nchar(matches)
+#     return(matches[which(matches == min(lengths))])
+#   }
+# }
+#
+# threeway_contrasts_continuous <- function(model, pred, modx, mod2, modx.values,
+#                                           mod2.values, .vcov) {
+#   # Get all term labels
+#   b1_term <- pred
+#   b2_term <- modx
+#   b3_term <- mod2
+#   b4_term <- get_int_term(model, c(pred, modx))
+#   b5_term <- get_int_term(model, c(pred, mod2))
+#   b6_term <- get_int_term(model, c(modx, mod2))
+#   b7_term <- get_int_term(model, c(pred, modx, mod2))
+#
+#   # TODO: deal with this
+#   combos <- expand.grid(mod2.values, modx.values)
+#   names(combos) <- c(mod2, modx)
+#
+#   get_delta <- function(b1, b2, b3, b4, b5, b6, b7, w1, z1, w2, z2) {}
+#
+# }

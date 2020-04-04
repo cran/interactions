@@ -1,3 +1,29 @@
+# interactions 1.1.3
+
+Minor fix:
+
+* Plotting functions no longer fail when there is missing data in the moderator
+variable(s).
+
+# interactions 1.1.2
+
+Bugfixes: 
+
+* Plotting functions no longer fail with incomplete source data.
+* Plotting functions now respect the order of `modx.values` and `mod2.values`
+arguments. (#29)
+* `interact_plot()` no longer ignores the `point.alpha` argument. (#25)
+* Plotting functions now allow you to specify labels for `modx.values` or
+`mod2.values` by passing a named vector to those arguments. (#30)
+* `sim_slopes()` now prints labels when requested with the `modx.labels` or
+`mod2.labels` arguments. (#32)
+
+Feature update:
+
+* Plotting functions now better support `brmsfit` objects, in particular 
+those with multiple dependent variables and distributional dependent variables.
+Use the `resp` and `dpar` arguments to specify which you want to use. 
+
 # interactions 1.1.1
 
 Bugfixes:
