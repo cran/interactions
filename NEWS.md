@@ -1,3 +1,15 @@
+# interactions 1.1.5
+
+* Made a small change to avoid testing errors in a forthcoming R release.
+
+# interactions 1.1.4
+
+Bugfix:
+
+* `sim_slopes()` now correctly handles the `robust` argument when it is not
+set to `TRUE` or `FALSE`. Many thanks to Andy Field for reporting the issue. 
+(#36)
+
 # interactions 1.1.3
 
 Minor fix:
