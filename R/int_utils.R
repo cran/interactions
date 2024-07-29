@@ -38,7 +38,7 @@
 #'
 #' @family interaction tools
 #'
-#' @author Jacob Long <\email{long.1377@@osu.edu}>
+#' @author Jacob Long \email{jacob.long@@sc.edu}
 #'
 #' @examples
 #'
@@ -82,15 +82,14 @@ probe_interaction <- function(model, pred, modx, mod2 = NULL, ...) {
   ipnames <- names(formals(interact_plot))
 
   # Capture the arguments
-  dots <- eval(substitute(alist(...)))
+  dots <- list(...)
 
   # Capture explicit args
   args <- match.call()
 
   # Add the actual arguments
-  dots <- list(unlist(dots), model = args$model, modx = args$modx,
-               pred = args$pred, mod2 = args$mod2)
-  dots <- unlist(dots)
+  dots <- c(dots, model = args$model, modx = args$modx, pred = args$pred, 
+            mod2 = args$mod2)
 
   # Create list of arguments accepted by sim_slopes
   ssargs <- dots[names(dots) %in% ssnames]
@@ -355,18 +354,19 @@ auto_mod_vals <-
 ## Centering
 
 center_ss <- function(d, weights, facvars = NULL, fvars, pred, resp, modx,
-                        survey, design = NULL, mod2, wname, offname, centered) {
+                      survey, design = NULL, mod2, wname, offname, centered,
+                      at = NULL) {
 
   # Just need to pick a helper function based on survey vs no survey
   if (survey == TRUE) {
 
     out <- center_ss_survey(d, weights, facvars, fvars, pred, resp, modx,
-                              survey, design, mod2, wname, offname, centered)
+                            survey, design, mod2, wname, offname, centered, at)
 
   } else {
 
     out <- center_ss_non_survey(d, weights, facvars, fvars, pred, resp, modx,
-                                  mod2, wname, offname, centered)
+                                mod2, wname, offname, centered, at)
 
   }
 
@@ -378,9 +378,9 @@ center_ss <- function(d, weights, facvars = NULL, fvars, pred, resp, modx,
 ## If not svydesign, centering is fairly straightforward
 
 center_ss_non_survey <- function(d, weights, facvars = NULL, fvars, pred,
-                                   resp, modx, mod2, wname, offname, centered) {
+                                 resp, modx, mod2, wname, offname, centered, at) {
 
-  omitvars <- c(resp, modx, mod2, wname, offname)
+  omitvars <- c(pred, resp, modx, mod2, wname, offname)
 
   # Dealing with two-level factors that aren't part of an interaction
   # /focal pred
@@ -390,8 +390,8 @@ center_ss_non_survey <- function(d, weights, facvars = NULL, fvars, pred,
   if (centered[1] != "all" && centered[1] != "none") {
 
     if (any(omitvars %in% centered)) {
-      warning("Moderators, outcome variables, and weights/offsets",
-              " cannot be centered.")
+      warn_wrap("Moderators, outcome variables, and weights/offsets
+                cannot be centered.")
       centered <- centered[centered %nin% omitvars]
     }
     if (length(centered) > 0) {
@@ -423,7 +423,7 @@ center_ss_non_survey <- function(d, weights, facvars = NULL, fvars, pred,
     # Dealing with two-level factors that aren't part
     # of an interaction/focal pred
     for (v in fv2) {
-      if (is.factor(d[[v]]) & length(unique(d[[v]])) == 2) {
+      if (is.factor(d[[v]]) && length(unique(d[[v]])) == 2) {
 
         facvars <- c(facvars, v)
 
@@ -432,8 +432,9 @@ center_ss_non_survey <- function(d, weights, facvars = NULL, fvars, pred,
 
   }
 
-  # Fixes a data type error with predict() later
-  d <- as.data.frame(d)
+  if (!is.null(at)) {
+    d <- set_at(at = at, d = d)
+  }
 
   out <- list(d = d, facvars = facvars, fvars = fvars, design = NULL)
 
@@ -445,9 +446,9 @@ center_ss_non_survey <- function(d, weights, facvars = NULL, fvars, pred,
 
 center_ss_survey <- function(d, weights, facvars = NULL, fvars, pred, resp,
                              modx, survey, design, mod2, wname, offname,
-                             centered) {
+                             centered, at) {
 
-  omitvars <- c(resp, modx, mod2, wname, offname)
+  omitvars <- c(pred, resp, modx, mod2, wname, offname, names(at))
 
   # Dealing with two-level factors that aren't part of an interaction
   # /focal pred
@@ -457,8 +458,8 @@ center_ss_survey <- function(d, weights, facvars = NULL, fvars, pred, resp,
   if (centered[1] != "all" && centered[1] != "none") {
 
     if (any(omitvars %in% centered)) {
-      warning("Moderators, outcome variables, and weights/offsets",
-              " cannot be centered.")
+      warn_wrap("Moderators, outcome variables, and weights/offsets cannot be 
+                 centered.")
       centered <- centered[centered %nin% omitvars]
     }
     design <- gscale(vars = centered, data = design, center.only = TRUE)
@@ -476,19 +477,15 @@ center_ss_survey <- function(d, weights, facvars = NULL, fvars, pred, resp,
     }
 
   } else if (centered == "none") {
-
     # Dealing with two-level factors that aren't part
     # of an interaction/focal pred
     for (v in fv2) {
       if (is.factor(d[[v]]) && length(unique(d[[v]])) == 2) {
-
         facvars <- c(facvars, v)
-
       }
     }
 
   } else if (centered == "all") {
-
     # Center all non-focal
     ndfvars <- fvars[fvars %nin% omitvars]
 
@@ -496,13 +493,32 @@ center_ss_survey <- function(d, weights, facvars = NULL, fvars, pred, resp,
       design <- gscale(vars = ndfvars, data = design, center.only = TRUE)
       d <- design$variables
     }
+  }
 
+  if (!is.null(at)) {
+    d <- set_at(at = at, d = d)
   }
 
   out <- list(d = d, design = design, facvars = facvars, fvars = fvars)
 
   return(out)
+}
 
+#### Deal with at variables #################################################
+set_at <- function(at, d) {
+  for (v in names(at)) {
+    if (v %nin% names(d)) stop_wrap("`at` variable ", v, " not found in data.")
+    if (!is.numeric(d[[v]])) {
+      warn_wrap("Inclusion of non-numeric variable ", v, " in `at` argument
+                is not currently supported. As an alternative, treat the 
+                variable as a factor and use the relevel() function to
+                set this value as its reference level before fitting your
+                model.")
+    } else {
+      d[[v]] <- d[[v]] - at[[v]]
+    }
+  }
+  return(d)
 }
 
 #### Send deprecation warnings ##############################################
@@ -626,7 +642,7 @@ prep_data <- function(model, d, pred, modx, mod2, pred.values = NULL,
   resp <- jtools::get_response_name(model, ...)
 
   # Create a design object
-  design <- if ("svyglm" %in% class(model)) {
+  design <- if (inherits(model, "svyglm")) {
     model$survey.design
   } else {
     NULL
@@ -923,7 +939,6 @@ drop_factor_levels <- function(d, var, values, labels) {
   return(d)
 
 }
-
 
 # get_contrasts <- function(model) {
 #   form <- as.formula(formula(model))

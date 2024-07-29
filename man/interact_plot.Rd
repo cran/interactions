@@ -197,8 +197,8 @@ for the plot. If \code{NULL}, no main title is used.}
 appears above the legend. If \code{NULL}, the name of the moderating
 variable is used.}
 
-\item{colors}{See \link{jtools_colors} for details on the types of arguments
-accepted. Default is "CUD Bright" for factor
+\item{colors}{See \code{\link[jtools:jtools_colors]{jtools_colors}} for details on the
+types of arguments accepted. Default is "CUD Bright" for factor
 moderators, "Blues" for +/- SD and user-specified \code{modx.values}
 values.}
 
@@ -376,14 +376,17 @@ empirical practice. SSRN Electronic Journal.
 \doi{10.2139/ssrn.2739221}
 }
 \seealso{
-\code{\link[rockchalk]{plotSlopes}} from \pkg{rockchalk} performs a
+\code{plotSlopes} from \code{rockchalk} performs a
 similar function, but
 with R's base graphics---this function is meant, in part, to emulate
 its features.
+
+Functions from the \code{margins} and \code{sjPlot} packages may also be useful
+if this one isn't working for you.
 
 \code{\link{sim_slopes}} performs a simple slopes analysis with a similar
 argument syntax to this function.
 }
 \author{
-Jacob Long <\email{long.1377@osu.edu}>
+Jacob Long \email{jacob.long@sc.edu}
 }

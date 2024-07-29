@@ -18,6 +18,14 @@ fitw <- lm(Income ~ HSGrad*Murder*Illiteracy + o70 + Area, data = states,
 fitl <- lm(Income ~ HSGrad*o70l, data = states)
 fitc <- lm(Income ~ HSGrad*Murder + o70c, data = states)
 
+library(ggplot2)
+diamond <- diamonds
+diamond <- diamond[diamond$color != "D",]
+set.seed(10)
+samps <- sample(1:nrow(diamond), 2000)
+diamond <- diamond[samps,]
+fitd <- lm(price ~ cut * color * clarity, data = diamond)
+
 if (requireNamespace("survey")) {
   suppressMessages(library(survey, quietly = TRUE))
   data(api)
@@ -67,56 +75,60 @@ test_that("sim_slopes works for lm w/ non-focal character", {
                            johnson_neyman = FALSE))
 })
 
+test_that("sim_slopes accepts categorical predictor", {
+  expect_warning(ss <- sim_slopes(fitd, pred = cut, modx = color))
+  expect_s3_class(ss, "sim_slopes")
+  expect_warning(ss <- sim_slopes(fitd, pred = cut, modx = color, mod2 = clarity))
+  expect_s3_class(ss, "sim_slopes")
+})
+
 context("sim_slopes methods")
 
-if (requireNamespace("huxtable") && requireNamespace("broom")) {
-  test_that("as_huxtable.sim_slopes works", {
-    ss3 <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy,
-                      mod2 = HSGrad)
-    ss <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy)
-    expect_is(as_huxtable.sim_slopes(ss3), "huxtable")
-    expect_is(as_huxtable.sim_slopes(ss), "huxtable")
-  })
-}
-
-if (requireNamespace("ggstance") && requireNamespace("broom")) {
-  test_that("plot.sim_slopes works", {
-    ss3 <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy,
-                      mod2 = HSGrad)
-    ss <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy)
-    expect_is(plot(ss3), "ggplot")
-    expect_is(plot(ss), "ggplot")
-  })
-}
+test_that("as_huxtable.sim_slopes works", {
+  skip_if_not_installed("huxtable")
+  skip_if_not_installed("broom")
+  ss3 <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy,
+                    mod2 = HSGrad)
+  ss <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy)
+  expect_is(as_huxtable.sim_slopes(ss3), "huxtable")
+  expect_is(as_huxtable.sim_slopes(ss), "huxtable")
+})
+test_that("plot.sim_slopes works", {
+  skip_if_not_installed("broom.mixed")
+  skip_if_not_installed("broom")
+  ss3 <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy,
+                    mod2 = HSGrad)
+  ss <- sim_slopes(model = fit, pred = Murder, modx = Illiteracy)
+  expect_is(plot(ss3), "ggplot")
+  expect_is(plot(ss), "ggplot")
+})
 
 context("sim_slopes svyglm")
 
-if (requireNamespace("survey")) {
-  test_that("sim_slopes works for svyglm", {
-    expect_is(sim_slopes(regmodel, pred = ell, modx = meals, mod2 = both,
-                         centered = "all"), "sim_slopes")
-  })
-}
+test_that("sim_slopes works for svyglm", {
+  skip_if_not_installed("survey")
+  expect_is(sim_slopes(regmodel, pred = ell, modx = meals, mod2 = both,
+                       centered = "all"), "sim_slopes")
+})
 
 context("sim_slopes merMod")
 
-if (requireNamespace("lme4")) {
+test_that("sim_slopes works for lme4", {
+  skip_if_not_installed("lme4")
   library(lme4, quietly = TRUE)
   data(VerbAgg)
   fmVA0 <- glmer(r2 ~ Anger * Gender + btype + situ + (1|id) + (1|item),
                  family = binomial, data = VerbAgg, nAGQ=0L)
   lmVA0 <- lmer(as.numeric(r2 == "Y") ~ Anger * Gender + btype + situ +
                   (1|id) + (1|item), data = VerbAgg)
+  
+  expect_is(sim_slopes(lmVA0, pred = Anger, modx = Gender,
+                       johnson_neyman = FALSE, t.df = "residual"),
+            "sim_slopes")
+  expect_is(sim_slopes(fmVA0, pred = Anger, modx = Gender,
+                       johnson_neyman = FALSE), "sim_slopes")
+})
 
-  test_that("sim_slopes works for lme4", {
-    expect_is(sim_slopes(lmVA0, pred = Anger, modx = Gender,
-                         johnson_neyman = FALSE, t.df = "residual"),
-              "sim_slopes")
-    expect_is(sim_slopes(fmVA0, pred = Anger, modx = Gender,
-                         johnson_neyman = FALSE), "sim_slopes")
-  })
-
-}
 
 ### johnson_neyman ###########################################################
 

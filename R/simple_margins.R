@@ -25,7 +25,7 @@
 #'    moderator}
 #'  \item{modx.values}{The values of the moderator used in the analysis}
 #'
-#' @author Jacob Long <\email{long.1377@@osu.edu}>
+#' @author Jacob Long \email{jacob.long@@sc.edu}
 #'
 #' @inheritParams sim_slopes
 #' @inheritParams margins::margins
@@ -90,7 +90,7 @@ sim_margins <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
   ss <- structure(ss, digits = digits)
 
   d <- get_data(model)
-  if (is_survey <- "svyglm" %in% class(model)) {
+  if (is_survey <- inherits(model, "svyglm")) {
     design <- model$survey.design
   } else {design <- NULL}
   # Which variables are factors?
@@ -185,7 +185,7 @@ sim_margins <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
     at_list[[mod2]] <- mod2vals2
   }
 
-  design <- if ("svyglm" %in% class(model)) model$survey.design else NULL
+  design <- if (inherits(model, "svyglm")) model$survey.design else NULL
 
   # Get the margins
   suppressWarnings({ # can't have confusing warnings from margins
@@ -247,7 +247,6 @@ sim_margins <- function(model, pred, modx, mod2 = NULL, modx.values = NULL,
 
 #' @export
 #' @importFrom cli cat_rule rule
-#' @importFrom crayon red bold italic
 
 print.sim_margins <- function(x, ...) {
 
@@ -274,7 +273,7 @@ print.sim_margins <- function(x, ...) {
 
       m <- ss$slopes[[j]]
 
-      if (class(x$mod2.values) != "character") {
+      if (inherits(x$mod2.values, "character")) {
         m[x$mod2] <- num_print(m[x$mod2], x$digits)
       }
 
@@ -308,11 +307,14 @@ print.sim_margins <- function(x, ...) {
     }
 
     # Clearly label simple slopes
-    cat(bold(underline("SIMPLE MARGINS")), "\n\n")
+    cli::cat_line(
+      cli::style_bold(cli::style_underline("SIMPLE MARGINS")),
+      "\n"
+    )
 
     for (i in seq_along(x$modx.values)) {
 
-      if (class(x$modx.values) != "character") {
+      if (inherits(x$modx.values, "character")) {
         m[x$modx] <- num_print(m[x$modx], digits = x$digits)
       }
 
@@ -329,8 +331,8 @@ print.sim_margins <- function(x, ...) {
         modx_label <- paste0(m[i, x$modx])
       }
 
-      cat(italic(paste0("Average marginal effect of ", x$pred, " when ",
-                        x$modx, " = ", modx_label, ": \n\n")))
+      cli::cat_line(cli::style_italic(paste0("Average marginal effect of ", x$pred, " when ",
+                        x$modx, " = ", modx_label, ": \n")))
       print(md_table(slopes, digits = x$digits, format = "pandoc",
                      row.names = FALSE, sig.digits = FALSE))
 
@@ -398,7 +400,7 @@ tidy.sim_margins <- function(x, conf.level = .95, ...) {
     base$conf.high <- all_slopes[,make_ci_labs(conf.level)[[2]]]
   } else { # If not, calculate them
     alpha <- (1 - conf.level) / 2
-    crit_t <- if (class(x$mods[[1]]) == "lm") {
+    crit_t <- if (inherits(x$mods[[1]], "lm")) {
       abs(qt(alpha, df = df.residual(x$mods[[1]])))
     } else {
       abs(qnorm(alpha))

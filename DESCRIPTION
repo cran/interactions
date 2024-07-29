@@ -1,7 +1,7 @@
 Package: interactions
 Type: Package
 Title: Comprehensive, User-Friendly Toolkit for Probing Interactions
-Version: 1.1.5
+Version: 1.2.0
 Authors@R: person(c("Jacob","A."), "Long", email = "jacob.long@sc.edu",
   role = c("aut", "cre"), comment = c(ORCID = "0000-0002-1582-6214"))
 Description: A suite of functions for conducting and interpreting analysis 
@@ -16,16 +16,16 @@ URL: https://interactions.jacob-long.com
 BugReports: https://github.com/jacob-long/interactions/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
-Imports: ggplot2, crayon, cli, generics, jtools (>= 2.0.3), rlang (>=
-        0.3.0), tibble
-Suggests: broom, cowplot, ggstance, glue, huxtable (>= 3.0.0), lme4,
+Imports: ggplot2 (>= 3.4.0), cli, generics, broom, jtools (>= 2.0.3),
+        rlang (>= 0.3.0), tibble
+Suggests: cowplot, broom.mixed, glue, huxtable (>= 3.0.0), lme4,
         margins, sandwich, survey, knitr, rmarkdown, testthat, vdiffr
 Enhances: brms, rstanarm
-RoxygenNote: 7.1.1
 VignetteBuilder: knitr
+RoxygenNote: 7.3.2.9000
 NeedsCompilation: no
-Packaged: 2021-07-02 05:01:05 UTC; jacoblong
+Packaged: 2024-07-29 14:54:50 UTC; jacoblong
 Author: Jacob A. Long [aut, cre] (<https://orcid.org/0000-0002-1582-6214>)
 Maintainer: Jacob A. Long <jacob.long@sc.edu>
 Repository: CRAN
-Date/Publication: 2021-07-02 07:00:04 UTC
+Date/Publication: 2024-07-29 21:40:06 UTC

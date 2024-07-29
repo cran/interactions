@@ -165,8 +165,7 @@ cut2 <- function(x, cuts, m = 150, g, levels.mean = FALSE,
                 "\nUpper endpoints:", paste(format(up, digits = 12),
                                             collapse = " "))
     y <- structure(y, class = "factor", levels = labs)
-  }
-  else {
+  } else {
     if (minmax) {
       r <- range(x, na.rm = TRUE)
       if (r[1] < cuts[1])
@@ -207,6 +206,27 @@ cut2 <- function(x, cuts, m = 150, g, levels.mean = FALSE,
   y
 }
 
+# Some shorthand functions to automatically exclude NA
+quant <- function(x, ...) {
+  quantile(x, ..., na.rm = TRUE)
+}
+min2 <- function(...) {
+  min(..., na.rm = TRUE)
+}
+max2 <- function(...) {
+  max(..., na.rm = TRUE)
+}
+
+# Avoiding unnecessary import of scales --- this is scales::squish
+squish <- function(x, range = c(0, 1), only.finite = TRUE) {
+  force(range)
+  finite <- if (only.finite)
+    is.finite(x)
+  else TRUE
+  x[finite & x < range[1]] <- range[1]
+  x[finite & x > range[2]] <- range[2]
+  x
+}
 
 #'@export
 #'@importFrom generics tidy
@@ -215,3 +235,68 @@ generics::tidy
 #'@export
 #'@importFrom generics glance
 generics::glance
+
+### Hadley update #############################################################
+# modified from https://stackoverflow.com/questions/13690184/update-inside-a-function-
+# only-searches-the-global-environment
+#' @importFrom stats update.formula
+
+j_update <- function(mod, formula = NULL, data = NULL, offset = NULL,
+                     weights = NULL, call.env = parent.frame(), ...) {
+  call <- getCall(mod)
+  if (is.null(call)) {
+    stop("Model object does not support updating (no call)", call. = FALSE)
+  }
+  term <- terms(mod)
+  if (is.null(term)) {
+    stop("Model object does not support updating (no terms)", call. = FALSE)
+  }
+
+  if (!is.null(data)) call$data <- data
+  if (!is.null(formula)) call$formula <- update.formula(call$formula, formula)
+  env <- attr(term, ".Environment")
+  # Jacob add
+  # if (!is.null(offset))
+  call$offset <- offset
+  # if (!is.null(weights))
+  call$weights <- weights
+
+
+  extras <- as.list(match.call())[-1]
+  extras <- extras[which(names(extras) %nin% c("mod", "formula", "data",
+                                               "offset", "weights",
+                                               "call.env"))]
+  for (i in seq_along(extras)) {
+    if (is.name(extras[[i]])) {
+      extras[[i]] <- eval(extras[[i]], envir = call.env)
+    }
+  }
+
+  existing <- !is.na(match(names(extras), names(call)))
+  for (a in names(extras)[existing]) call[[a]] <- extras[[a]]
+  if (any(!existing)) {
+    call <- c(as.list(call), extras[!existing])
+    call <- as.call(call)
+  }
+
+  if (is.null(call.env)) {call.env <- parent.frame()}
+
+  eval(call, env, call.env)
+}
+
+# adapted from https://stackoverflow.com/a/42742370
+# Looking for whether a method is defined for a given object (...)
+# getS3method() doesn't work for something like merMod because the string
+# "merMod" is not in the vector returned by class()
+#' @importFrom utils methods
+check_method <- function(generic, ...) {
+  ch <- deparse(substitute(generic))
+  f <- X <- function(x, ...) UseMethod("X")
+  for(m in methods(ch)) assign(sub(ch, "X", m, fixed = TRUE), "body<-"(f, value = m))
+  tryCatch({
+    X(...)
+    TRUE
+  }, error = function(e) {
+    FALSE
+  })
+}

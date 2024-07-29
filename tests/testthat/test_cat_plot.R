@@ -20,6 +20,11 @@ test_that("cat_plot handles simple plot (bar)", {
   expect_doppelganger("plmbar", plmbar)
 })
 
+test_that("interact_plot handles simple cat plot (bar)", {
+  plmbar <- interact_plot(fit, pred = color, modx = cut)
+  expect_doppelganger("plmbar interact_plot", plmbar)
+})
+
 test_that("cat_plot handles intervals (bar)", {
   plmbari <- cat_plot(fit, pred = color, modx = cut, interval = TRUE)
   expect_doppelganger("plmbari", plmbari)
@@ -40,6 +45,12 @@ test_that("cat_plot handles intervals (line)", {
   plmlinei <- cat_plot(fit, pred = color, modx = cut, interval = TRUE,
                         geom = "line")
   expect_doppelganger("plmlinei", plmlinei)
+})
+
+test_that("interact_plot handles cat_plot intervals (line)", {
+  plmlinei <- interact_plot(fit, pred = color, modx = cut, interval = TRUE,
+                        geom = "line", data = diamond)
+  expect_doppelganger("plmlinei interact_plot", plmlinei)
 })
 
 test_that("cat_plot handles plotted points (line)", {
@@ -86,6 +97,13 @@ test_that("cat_plot handles point.shape (point)", {
   expect_doppelganger("plmptps", plmptps)
 })
 
+test_that("interact_plot handles cat_plot point.shape (point)", {
+  plmptps <- interact_plot(fit, pred = color, modx = cut, interval = TRUE,
+                      plot.points = TRUE, geom = "point", point.shape = TRUE,
+                      jitter = 0, data = diamond)
+  expect_doppelganger("plmptps interact_plot", plmptps)
+})
+
 test_that("cat_plot handles simple plot (boxplot)", {
   expect_error(cat_plot(fit, pred = color, modx = cut, geom = "boxplot"))
 })
@@ -109,26 +127,25 @@ test_that("cat_plot handles offsets", {
 
 context("cat_plot survey")
 
-if (requireNamespace("survey")) {
+test_that("cat_plot handles svyglm", {
+  skip_if_not_installed("survey")
   library(survey, quietly = TRUE)
   data(api)
   dstrat <- svydesign(id = ~1, strata = ~stype, weights = ~pw, data = apistrat,
                       fpc = ~fpc)
   regmodel <- svyglm(api00 ~ ell * meals * both + sch.wide, design = dstrat)
-  test_that("cat_plot handles svyglm", {
-    psvycat <- cat_plot(regmodel, pred = both)
-    expect_doppelganger("psvycat", psvycat)
-  })
-}
+  
+  psvycat <- cat_plot(regmodel, pred = both)
+  expect_doppelganger("psvycat", psvycat)
+})
 
 context("cat_plot merMod")
 
-if (requireNamespace("lme4")) {
-  test_that("cat_plot handles merMod", {
-    plme4cat <- cat_plot(mv, pred = mode, modx = Gender, interval = FALSE)
-    expect_doppelganger("plme4cat", plme4cat)
-  })
-}
+test_that("cat_plot handles merMod", {
+  skip_if_not_installed("lme4")
+  plme4cat <- cat_plot(mv, pred = mode, modx = Gender, interval = FALSE)
+  expect_doppelganger("plme4cat", plme4cat)
+})
 
 context("cat_plot 3-way")
 
@@ -266,11 +283,11 @@ test_that("cat_plot handles point.shape w/ no mod. (point)", {
   expect_doppelganger("p0ptps", p0ptps)
 })
 
-if (requireNamespace("brms")) {
-  context("brmsfit plots")
+context("brmsfit plots")
+
+test_that("brmsfit objects are supported", {
+  skip_if_not_installed("brms")
   bfit <- readRDS("brmfit.rds")
-  test_that("brmsfit objects are supported", {
-    pcatbfit <- cat_plot(bfit, pred = "Trt", interval = TRUE)
-    expect_doppelganger("pcatbfit", pcatbfit)
-  })
-}
+  pcatbfit <- cat_plot(bfit, pred = "Trt", interval = TRUE)
+  expect_doppelganger("pcatbfit", pcatbfit)
+})

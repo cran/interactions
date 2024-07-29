@@ -6,7 +6,7 @@
 #'
 #' @param model A regression model. The function is tested with \code{lm},
 #'   \code{glm}, \code{\link[survey]{svyglm}}, \code{\link[lme4]{merMod}},
-#'   \code{\link[quantreg]{rq}}, \code{\link[brms]{brmsfit}},
+#'   `rq` (from `quantreg`), \code{\link[brms]{brmsfit}},
 #'   \code{stanreg} models.
 #'   Models from other classes may work as well but are not officially
 #'   supported. The model should include the interaction of interest.
@@ -136,8 +136,8 @@
 #'   appears above the legend. If \code{NULL}, the name of the moderating
 #'   variable is used.
 #'
-#' @param colors See [jtools_colors] for details on the types of arguments
-#'    accepted. Default is "CUD Bright" for factor
+#' @param colors See [`jtools_colors`][jtools::jtools_colors] for details on the
+#'    types of arguments accepted. Default is "CUD Bright" for factor
 #'    moderators, "Blues" for +/- SD and user-specified \code{modx.values}
 #'    values.
 #'
@@ -192,7 +192,7 @@
 #'   for the purpose of exploring interactions in regression models.
 #'
 #'   The function is designed for two and three-way interactions. For
-#'   additional terms, the \pkg{effects} package may be better suited to the
+#'   additional terms, the `effects` package may be better suited to the
 #'   task.
 #'
 #'   This function supports nonlinear and generalized linear models and by
@@ -223,7 +223,7 @@
 #'   plots. When you do, the data are split into three approximately
 #'   equal-sized groups with the lowest third, middle third, and highest third
 #'   of the data split accordingly. You can replicate this procedure using
-#'   [Hmisc::cut2()] with `g = 3` from the `Hmisc` package. Sometimes, the
+#'   `cut2()` with `g = 3` from the `Hmisc` package. Sometimes, the
 #'   groups will not be equal in size because the number of observations is
 #'   not divisible by 3 and/or there are multiple observations with the same
 #'   value at one of the cut points.
@@ -255,12 +255,15 @@
 #' @return The functions returns a \code{ggplot} object, which can be treated
 #'   like a user-created plot and expanded upon as such.
 #'
-#' @author Jacob Long <\email{long.1377@@osu.edu}>
+#' @author Jacob Long \email{jacob.long@@sc.edu}
 #'
-#' @seealso \code{\link[rockchalk]{plotSlopes}} from \pkg{rockchalk} performs a
+#' @seealso \code{plotSlopes} from \code{rockchalk} performs a
 #'   similar function, but
 #'   with R's base graphics---this function is meant, in part, to emulate
 #'   its features.
+#' 
+#'   Functions from the `margins` and `sjPlot` packages may also be useful
+#'   if this one isn't working for you.
 #'
 #'   \code{\link{sim_slopes}} performs a simple slopes analysis with a similar
 #'   argument syntax to this function.
@@ -353,6 +356,16 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
     if ("mod2vals" %in% names(dots)) {
       mod2.values <- dots$mod2vals
     }
+    # If it's a categorical predictor, I want a different default for the
+    # geom argument than cat_plot() uses so it looks more like what you'd 
+    # expect from this function
+    if ("geom" %nin% names(dots)) {
+      geom <- "line"
+    } else {
+      geom <- dots$geom
+    }
+  } else {
+    geom <- "line"
   }
 
   if (!is.null(color.class)) {
@@ -362,11 +375,11 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
   }
 
   # Evaluate the modx, mod2, pred args
-  pred <- quo_name(enexpr(pred))
-  modx <- quo_name(enexpr(modx))
-  if (modx == "NULL") {modx <- NULL}
-  mod2 <- quo_name(enexpr(mod2))
-  if (mod2 == "NULL") {mod2 <- NULL}
+  pred <- as_name(enquo(pred))
+  modx <- enquo(modx)
+  modx <- if (quo_is_null(modx)) {NULL} else {as_name(modx)}
+  mod2 <- enquo(mod2)
+  mod2 <- if (quo_is_null(mod2)) {NULL} else {as_name(mod2)}
 
   if (any(c(pred, modx, mod2) %in% centered)) {
     warn_wrap("You cannot mean-center the focal predictor or moderators with
@@ -387,6 +400,16 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
     d <- data
   }
   weights <- get_weights(model, d)$weights_name
+
+  # Check for variables in the data
+  if (any(c(pred, modx, mod2) %nin% names(d))) {
+    missed_vars <- c(pred, modx, mod2) %not% names(d)
+    stop_wrap(paste(missed_vars, collapse = " and "),
+              ifelse(length(missed_vars) > 1, yes = " were ", no = " was "),
+              "not found in the data. If you are using a transformed variable,
+              like 'log(x)', use the non-transformed name ('x') as the input to
+              this function.")
+  }
 
   # If modx.values is named, use the names as labels
   if (is.null(modx.labels) & !is.null(names(modx.values))) {
@@ -420,30 +443,61 @@ interact_plot <- function(model, pred, modx, modx.values = NULL, mod2 = NULL,
   pm <- pred_out$predicted
   d <- pred_out$original
 
-  # Check for factor predictor
+  # Check for factor predictor and send to plot_cat() if so
   if (!is.numeric(d[[pred]])) {
-    # I could assume the factor is properly ordered, but that's too risky
-    stop("Focal predictor (\"pred\") cannot be a factor. Either",
-         " use it as modx, convert it to a numeric dummy variable,",
-         " or use the cat_plot function for factor by factor interaction",
-         " plots.")
+    # Warn users that this is kinda janky
+    cli::cli_inform(c(
+      x = "Detected factor predictor.",
+      i = "Plotting with cat_plot() instead.",
+      i = "See {.help interactions::cat_plot} for full details on 
+         how to specify models with categorical predictors.",
+      i = "If you  experience errors or unexpected results, try using 
+           cat_plot() directly."
+    ))
+    # Gather arguments for plot_cat()
+    args <- list(predictions = pm, pred = pred, modx = modx, mod2 = mod2,
+                  data = d, modx.values = modxvals2, mod2.values = mod2vals2,
+                  interval = interval,
+                  plot.points = plot.points | partial.residuals,
+                  point.shape = point.shape, vary.lty = vary.lty,
+                  pred.labels = pred.labels, modx.labels = modx.labels,
+                  mod2.labels = mod2.labels, x.label = x.label, y.label = y.label,
+                  main.title = main.title, legend.main = legend.main,
+                  colors = colors, weights = weights, resp = resp,
+                  point.size = point.size, line.thickness = line.thickness,
+                  jitter = jitter, point.alpha = point.alpha, geom = geom)
+    # Deal with cat_plot() arguments provided via ...
+    if (length(dots) > 0) {
+      # Make sure it's not geom which I've already handled
+      if (length(dots %not% "geom") > 0) {
+        # Append to this list
+        args <- c(args, dots %not% "geom")
+      }
+    }
+    # Call internal plotting function
+    return(do.call("plot_cat", args))
+    # Using plot_cat turns out to be more robust than cat_plot. I'm doing 
+    # something dumb and/or badly with environments that makes calling 
+    # plot_cat() within a function fail inside of testthat (and inside of
+    # any arbitrary function that calls interact_plot() with a categorical
+    # predictor even in the "normal" environment).
+  } else {
+    # Send to internal plotting function
+    plot_mod_continuous(predictions = pm, pred = pred, modx = modx, resp = resp,
+                        mod2 = mod2, data = d,
+                        plot.points = plot.points | partial.residuals,
+                        interval = interval, linearity.check = linearity.check,
+                        x.label = x.label, y.label = y.label,
+                        pred.labels = pred.labels, modx.labels = modx.labels,
+                        mod2.labels = mod2.labels, main.title = main.title,
+                        legend.main = legend.main, colors = colors,
+                        line.thickness = line.thickness,
+                        vary.lty = vary.lty, jitter = jitter,
+                        modxvals2 = modxvals2, mod2vals2 = mod2vals2,
+                        weights = weights, rug = rug, rug.sides = rug.sides,
+                        point.size = point.size, point.shape = point.shape,
+                        facet.modx = facet.modx, point.alpha = point.alpha)
   }
-
-  # Send to internal plotting function
-  plot_mod_continuous(predictions = pm, pred = pred, modx = modx, resp = resp,
-                      mod2 = mod2, data = d,
-                      plot.points = plot.points | partial.residuals,
-                      interval = interval, linearity.check = linearity.check,
-                      x.label = x.label, y.label = y.label,
-                      pred.labels = pred.labels, modx.labels = modx.labels,
-                      mod2.labels = mod2.labels, main.title = main.title,
-                      legend.main = legend.main, colors = colors,
-                      line.thickness = line.thickness,
-                      vary.lty = vary.lty, jitter = jitter,
-                      modxvals2 = modxvals2, mod2vals2 = mod2vals2,
-                      weights = weights, rug = rug, rug.sides = rug.sides,
-                      point.size = point.size, point.shape = point.shape,
-                      facet.modx = facet.modx, point.alpha = point.alpha)
 
 }
 
@@ -545,7 +599,7 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
   p <- ggplot(pm, aes(x = !! pred, y = !! resp, colour = !! modx,
                       group = !! grp, linetype = !! lty))
 
-  p <- p + geom_path(size = line.thickness, show.legend = !facet.modx)
+  p <- p + geom_path(linewidth = line.thickness, show.legend = !facet.modx)
 
   # Plot intervals if requested
   if (interval == TRUE) {
@@ -600,7 +654,7 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
   if (linearity.check == TRUE) {
     p <- p + stat_smooth(data = d,
                          aes(x = !! pred, y = !! resp, group = !! grp),
-                         method = "loess", size = 1,
+                         method = "loess", linewidth = 1,
                          show.legend = FALSE, inherit.aes = FALSE,
                          se = FALSE, span = 2, geom = "line",
                          alpha = 0.6, color = "red")
@@ -669,28 +723,6 @@ plot_mod_continuous <- function(predictions, pred, modx, resp, mod2 = NULL,
         p <- p + scale_x_continuous(breaks = brks)
       }
     }
-  }
-
-  # Avoiding unnecessary import of scales --- this is scales::squish
-  squish <- function(x, range = c(0, 1), only.finite = TRUE) {
-    force(range)
-    finite <- if (only.finite)
-      is.finite(x)
-    else TRUE
-    x[finite & x < range[1]] <- range[1]
-    x[finite & x > range[2]] <- range[2]
-    x
-  }
-
-  # Some shorthand functions to automatically exclude NA
-  quant <- function(x, ...) {
-    quantile(x, ..., na.rm = TRUE)
-  }
-  min2 <- function(...) {
-    min(..., na.rm = TRUE)
-  }
-  max2 <- function(...) {
-    max(..., na.rm = TRUE)
   }
 
   # Get scale colors, provide better legend title

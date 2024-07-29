@@ -68,6 +68,16 @@
 #'  e.g., `c(0, 10)`.
 #'
 #' @param title The plot title. `"Johnson-Neyman plot"` by default.
+#' 
+#' @param y.label If you prefer to override the automatic labelling of the
+#'  y axis, you can specify your own label here. The y axis represents a 
+#'  *slope* so it is recommended that you do not simply give the name of the 
+#'  predictor variable but instead make clear that it is a slope. By default,
+#'  "Slope of \[pred\]" is used (with whatever `pred` is).
+#' 
+#' @param modx.label If you prefer to override the automatic labelling of
+#'  the x axis, you can specify your own label here. By default, the name 
+#'  `modx` is used.
 #'
 #' @details
 #'
@@ -111,7 +121,7 @@
 #'  \item{plot}{The \code{ggplot} object used for plotting. You can tweak the
 #'    plot like you could any other from \code{ggplot}.}
 #'
-#' @author Jacob Long <\email{long.1377@@osu.edu}>
+#' @author Jacob Long \email{jacob.long@@sc.edu}
 #'
 #' @family interaction tools
 #'
@@ -150,14 +160,13 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
                            digits = getOption("jtools-digits", 2),
                            critical.t = NULL, sig.color = "#00BFC4",
                            insig.color = "#F8766D", mod.range = NULL,
-                           title = "Johnson-Neyman plot") {
+                           title = "Johnson-Neyman plot", y.label = NULL,
+                           modx.label = NULL) {
 
   # Evaluate the modx, mod2, pred args
-  pred <- quo_name(enexpr(pred))
-  if (make.names(pred) != pred) pred <- bt(pred)
-  modx <- quo_name(enexpr(modx))
-  if (make.names(modx) != modx) modx <- bt(modx)
-  if (modx == "NULL") {modx <- NULL}
+  pred <- as_name(enquo(pred))
+  modx <- enquo(modx)
+  modx <- if (quo_is_null(modx)) {NULL} else {as_name(modx)}
 
   # Handling df argument
   if (df == "residual") {
@@ -175,13 +184,13 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
 
   # Structure
   out <- list()
-  out <- structure(out, pred = un_bt(pred), modx = un_bt(modx), alpha = alpha,
+  out <- structure(out, pred = pred, modx = modx, alpha = alpha,
                    plot = plot, digits = digits, control.fdr = control.fdr)
 
   # Construct interaction term
   ## Create helper function to use either fixef() or coef() depending on input
   get_coef <- function(mod) {
-    if (inherits(mod, "merMod") | inherits(mod, "brmsfit")) {
+    if (inherits(mod, "merMod") || inherits(mod, "brmsfit")) {
       coef <- lme4::fixef(model)
       if (inherits(mod, "brmsfit")) {
         coefs <- coef[,1, drop = TRUE]
@@ -193,29 +202,57 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
       coef(mod)
     }
   }
-  ## Hard to predict which order lm() will have the predictors in
+  # lmerModTest and perhaps others do not give dataClasses in terms object
+  # so I need to both check for existence and check for data type
+  dataclass <- attr(terms(model), "dataClasses")[pred]
+  # Try to support logical predictors, maybe a precursor to factor predictors
+  if (!is.null(dataclass) && dataclass == "logical") {
+      pred_names <- paste0(pred, "TRUE")
+    } else {
+      pred_names <- pred
+  }
+
+  ## Old comment: Hard to predict which order lm() will have the predictors in
+  ## New: Note that this information is actually in the terms object, but 
+  ## I'm going to leave it this way for now since I need to work around 
+  ## panelr compatibility anyway — it manually calculates the interaction 
+  ## term rather than specifying it via the design matrix
   # first possible ordering
-  intterm1 <- paste(pred, ":", modx, sep = "")
+  intterm1 <- paste0(pred_names, ":", modx)
   # is it in the coef names?
   intterm1tf <- any(intterm1 %in% names(get_coef(model)))
   # second possible ordering
-  intterm2 <- paste(modx, ":", pred, sep = "")
+  intterm2 <- paste0(modx, ":", pred_names)
   # is it in the coef names?
   intterm2tf <- any(intterm2 %in% names(get_coef(model)))
   # Taking care of other business, creating coefs object for later
   coefs <- get_coef(model)
-
 
   ## Now we know which of the two is found in the coefficents
   # Using this to get the index of the TRUE one
   inttermstf <- c(intterm1tf, intterm2tf)
   intterms <- c(intterm1, intterm2) # Both names, want to keep one
   intterm <- intterms[which(inttermstf)] # Keep the index that is TRUE
+  # See if we can recover if intterm isn't found, this is motivated by 
+  # desire for compatibility with panelr
+  if (length(intterm) == 0) {
+    intterm1 <- paste0("`", pred_names, ":", modx, "`")
+    intterm2 <- paste0("`", modx, ":", pred_names, "`")
+    intterm1tf <- any(intterm1 %in% names(get_coef(model)))
+    intterm2tf <- any(intterm2 %in% names(get_coef(model)))
+    inttermstf <- c(intterm1tf, intterm2tf)
+    intterms <- c(intterm1, intterm2) # Both names, want to keep one
+    intterm <- intterms[which(inttermstf)] 
 
+    if (length(intterm) == 0) {
+      stop_wrap("Could not find interaction term in the model, so 
+                Johnson-Neyman interval could not be calculated.")
+    }
+  }
   # Getting the range of the moderator
-  modrange <- range(model.frame(model)[,modx])
-  modrangeo <- range(model.frame(model)[,modx]) # for use later
-  modsd <- sd(model.frame(model)[,modx]) # let's expand outside observed range
+  modrange <- range(model.frame(model)[,un_bt(modx)])
+  modrangeo <- range(model.frame(model)[,un_bt(modx)]) # for use later
+  modsd <- sd(model.frame(model)[,un_bt(modx)]) # let's expand outside observed range
   if (is.null(mod.range)) {
     modrange[1] <- modrange[1] - modsd
     modrange[2] <- modrange[2] + modsd
@@ -272,7 +309,7 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
     test <- 0
     i <- 1 + length(marginal_effects)
 
-    while (test == 0 & i > 1) {
+    while (test == 0 && i > 1) {
 
       i <- i - 1
       test <- min(ps[ps_o][1:i] <= multipliers[i] * (alpha * 2))
@@ -285,33 +322,32 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
 
   # Construct constituent terms to calculate the subsequent quadratic a,b,c
   if (is.null(vmat)) {
-
     # Get vcov
     vmat <- vcov(model)
 
     # Variance of interaction term (gamma_3)
     covy3 <- vmat[intterm,intterm]
     # Variance of predictor term (gamma_1)
-    covy1 <- vmat[pred,pred]
+    covy1 <- vmat[pred_names,pred_names]
     # Covariance of predictor and interaction terms (gamma_1 by gamma_3)
-    covy1y3 <- vmat[intterm,pred]
+    covy1y3 <- vmat[intterm,pred_names]
     # Actual interaction coefficient (gamma_3)
     y3 <- coefs[intterm]
     # Actual predictor coefficient (gamma_1)
-    y1 <- coefs[pred]
+    y1 <- coefs[pred_names]
 
   } else { # user-supplied vcov, useful for robust calculation
 
     # Variance of interaction term (gamma_3)
     covy3 <- vmat[intterm,intterm]
     # Variance of predictor term (gamma_1)
-    covy1 <- vmat[pred,pred]
+    covy1 <- vmat[pred_names,pred_names]
     # Covariance of predictor and interaction terms (gamma_1 by gamma_3)
-    covy1y3 <- vmat[intterm,pred]
+    covy1y3 <- vmat[intterm,pred_names]
     # Actual interaction coefficient (gamma_3)
     y3 <- get_coef(model)[intterm]
     # Actual predictor coefficient (gamma_1)
-    y1 <- get_coef(model)[pred]
+    y1 <- get_coef(model)[pred_names]
 
   }
 
@@ -333,14 +369,8 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
     if (disc > 0) {
       out <- disc
     } else if (disc == 0) {
-      # msg <- "There is only one real solution for the Johnson-Neyman interval.
-      # Values cannot be supplied."
-      # warning(msg)
       return(NULL)
     } else {
-      # msg <- "There are no real solutions for the Johnson-Neyman interval.
-      # Values cannot be supplied."
-      # warning(msg)
       return(NULL)
     }
 
@@ -484,17 +514,17 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
     ggplot2::geom_path(data = cbso1, ggplot2::aes(x = cbso1[,modx],
                                     y = cbso1[,predl],
                                     color = cbso1[,"Significance"]),
-                       size = line.thickness) +
+                       linewidth = line.thickness) +
 
     ggplot2::geom_path(data = cbsi,
                        ggplot2::aes(x = cbsi[,modx], y = cbsi[,predl],
                                     color = cbsi[,"Significance"]),
-                       size = line.thickness) +
+                       linewidth = line.thickness) +
 
     ggplot2::geom_path(data = cbso2,
                        ggplot2::aes(x = cbso2[,modx], y = cbso2[,predl],
                                     color = cbso2[,"Significance"]),
-                       size = line.thickness) +
+                       linewidth = line.thickness) +
 
     ggplot2::geom_ribbon(data = cbso1,
                          ggplot2::aes(x = cbso1[,modx], ymin = cbso1[,"Lower"],
@@ -529,7 +559,7 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
       ggplot2::geom_segment(ggplot2::aes(x = modrangeo[1], xend = modrangeo[2],
                                        y = 0, yend = 0,
                                        linetype = "Range of\nobserved\ndata"),
-                          lineend = "square", size = 1.25)
+                          lineend = "square", linewidth = 1.25)
   }
 
     # Adding this scale allows me to have consistent ordering
@@ -565,6 +595,20 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
 
       ggplot2::theme(legend.key.size = ggplot2::unit(1, "lines"))
 
+    # Let users relabel the axis without changing source data
+    if (!is.null(y.label)) {
+      # If I don't think they realize it's a slope, give a message.
+      if (!grepl("slope", tolower(y.label))) {
+        msg_wrap("The y-axis represents a slope. Make sure you choose a label
+        that makes it clear it is the slope of ", pred, " rather than the
+        value of ", pred, ".")
+      }
+      plot <- plot + ggplot2::ylab(y.label)
+    }
+
+    if (!is.null(modx.label)) {
+      plot <- plot + ggplot2::xlab(modx.label)
+    }
 
   out$plot <- plot
 
@@ -580,7 +624,6 @@ johnson_neyman <- function(model, pred, modx, vmat = NULL, alpha = 0.05,
 }
 
 #' @export
-#' @importFrom crayon bold inverse underline
 
 print.johnson_neyman <- function(x, ...) {
 
@@ -588,9 +631,9 @@ print.johnson_neyman <- function(x, ...) {
 
   # Describe whether sig values are inside/outside the interval
   if (atts$inside == FALSE) {
-    inout <- inverse("OUTSIDE")
+    inout <- cli::style_inverse("OUTSIDE")
   } else {
-    inout <- inverse("INSIDE")
+    inout <- cli::style_inverse("INSIDE")
   }
 
   b_format <- num_print(x$bounds, atts$digits)
@@ -599,13 +642,16 @@ print.johnson_neyman <- function(x, ...) {
   pmsg <- paste("p <", alpha)
 
   # Print the output
-  cat(bold(underline("JOHNSON-NEYMAN INTERVAL")), "\n\n")
+  cli::cat_line(
+    cli::style_bold(cli::style_underline("JOHNSON-NEYMAN INTERVAL")),
+    "\n"
+  )
   if (all(is.finite(x$bounds))) {
     cat_wrap("When ", atts$modx, " is ", inout, " the interval [",
              b_format[1], ", ", b_format[2], "], the slope of ", atts$pred,
              " is ", pmsg, ".", brk = "\n\n")
-    cat_wrap(italic("Note: The range of observed values of", atts$modx,
-        "is "), "[", m_range[1], ", ", m_range[2], "]", brk = "\n\n")
+    cat_wrap(cli::style_italic("Note: The range of observed values of ", atts$modx,
+        " is "), "[", m_range[1], ", ", m_range[2], "]", brk = "\n\n")
   } else {
     cat_wrap("The Johnson-Neyman interval could not be found.
         Is the p value for your interaction term below

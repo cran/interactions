@@ -19,7 +19,7 @@ fitl <- lm(Income ~ HSGrad*o70l, data = states)
 fitc <- lm(Income ~ HSGrad*Murder + o70c, data = states)
 
 library(vdiffr)
-Sys.setenv("VDIFFR_RUN_TESTS" = FALSE)
+# Sys.setenv("VDIFFR_RUN_TESTS" = FALSE)
 
 if (requireNamespace("survey")) {
   suppressMessages(library(survey, quietly = TRUE))
@@ -99,9 +99,10 @@ test_that("interact_plot accepts user-specified values and labels", {
                                            "High" = 62))
   expect_doppelganger("plmlabelsc2", plmlabelsc2)
 
-  # Reject logical/factor pred
-  expect_error(interact_plot(model = fit2, pred = o70, modx = HSGrad,
-                             pred.labels = c("Under","Over")))
+  # ~~Reject~~ Accept logical/factor pred
+  expect_doppelganger("plmlabelscpred interact_plot to cat_plot",
+                      interact_plot(model = fit2, pred = o70, modx = HSGrad,
+                                    pred.labels = c("Under","Over")))
   plmlabelscpred <- interact_plot(model = fit2n, pred = o70n, modx = HSGrad,
                                   pred.labels = c("Under","Over"))
   expect_doppelganger("plmlabelscpred", plmlabelscpred)
@@ -137,22 +138,22 @@ test_that("interact_plot linearity.check works", {
 
 context("interact_plot svyglm")
 
-if (requireNamespace("survey")) {
-  test_that("interact_plot works for svyglm", {
-    psvya <- interact_plot(regmodel, pred = ell, modx = meals,  mod2 = both,
-                           centered = "all")
-    expect_doppelganger("psvya", psvya)
-    expect_warning(
-      psvy1 <- interact_plot(regmodel, pred = ell, modx = meals, mod2 = both,
-                             centered = "ell")
-    )
-    expect_doppelganger("psvy1", psvy1)
-  })
-}
+test_that("interact_plot works for svyglm", {
+  skip_if_not_installed("survey")
+  psvya <- interact_plot(regmodel, pred = ell, modx = meals,  mod2 = both,
+                         centered = "all")
+  expect_doppelganger("psvya", psvya)
+  expect_warning(
+    psvy1 <- interact_plot(regmodel, pred = ell, modx = meals, mod2 = both,
+                           centered = "ell")
+  )
+  expect_doppelganger("psvy1", psvy1)
+})
 
 context("interact_plot merMod")
 
-if (requireNamespace("lme4")) {
+test_that("interact_plot works for lme4", {
+  skip_if_not_installed("lme4")
   library(lme4, quietly = TRUE)
   data(VerbAgg)
   VerbAgg$mode_numeric <- as.numeric(VerbAgg$mode)
@@ -161,20 +162,17 @@ if (requireNamespace("lme4")) {
              data = VerbAgg)
   gm <- glmer(incidence ~ period + (1 | herd), family = poisson, data = cbpp,
               offset = log(size))
-
-  test_that("interact_plot works for lme4", {
-    expect_error(interact_plot(mve, pred = mode, modx = Gender))
-    plme4 <- interact_plot(mv, pred = mode_numeric, modx = Gender)
-    expect_doppelganger("plme4", plme4)
-    # expect_message(
-      plme4i <- interact_plot(mv, pred = mode_numeric, modx = Gender,
-                              interval = TRUE)
-    # )
-    expect_doppelganger("plme4i", plme4i)
-  })
-
-}
-
+  
+  expect_doppelganger("plme4 interact_plot to cat_plot",
+                      interact_plot(mve, pred = mode, modx = Gender))
+  plme4 <- interact_plot(mv, pred = mode_numeric, modx = Gender)
+  expect_doppelganger("plme4", plme4)
+  # expect_message(
+    plme4i <- interact_plot(mv, pred = mode_numeric, modx = Gender,
+                            interval = TRUE)
+  # )
+  expect_doppelganger("plme4i", plme4i)
+})
 context("interact_plot offsets")
 
 set.seed(100)
@@ -223,27 +221,27 @@ test_that("sim_slopes handles offsets", {
 
 #### brms and rstanarm tests #################################################
 
-if (requireNamespace("brms")) {
-  context("brmsfit plots 2")
+context("brmsfit plots 2")
+test_that("brmsfit objects are supported", {
+  skip_if_not_installed("brms")
+  
   bfit <- readRDS("brmfit.rds")
-  test_that("brmsfit objects are supported", {
-    pbfcat <- cat_plot(bfit, pred = "Trt", interval = TRUE)
-    expect_doppelganger("pbfcat", pbfcat)
-    pbfcont <- interact_plot(bfit, pred = "log_Base4_c", modx = "Trt",
-                             interval = TRUE)
-    expect_doppelganger("pbfcont", pbfcont)
-  })
-}
+  pbfcat <- cat_plot(bfit, pred = "Trt", interval = TRUE)
+  expect_doppelganger("pbfcat", pbfcat)
+  pbfcont <- interact_plot(bfit, pred = "log_Base4_c", modx = "Trt",
+                           interval = TRUE)
+  expect_doppelganger("pbfcont", pbfcont)
+})
 
-if (requireNamespace("rstanarm") & requireNamespace("lme4")) {
-  context("stanreg plots")
+context("stanreg plots")
+
+test_that("stanreg objects are supported", {
   rsfit <- readRDS("rsafit.rds")
   library(lme4)
   data(cbpp)
-  test_that("stanreg objects are supported", {
-    prsacont <- interact_plot(rsfit, pred = "size", modx = "period",
-                              interval = TRUE, data = cbpp)
-    expect_doppelganger("prsacont", prsacont)
-  })
-}
-
+  skip_if_not_installed("lme4")
+  skip_if_not_installed("rstanarm")
+  prsacont <- interact_plot(rsfit, pred = "size", modx = "period",
+                            interval = TRUE, data = cbpp)
+  expect_doppelganger("prsacont", prsacont)
+})
